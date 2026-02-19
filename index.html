@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Vault</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&family=Instrument+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --ink: #080810;
+  --deep: #0e0e1a;
+  --surface: #141422;
+  --card: #1a1a2e;
+  --lift: #202038;
+  --edge: rgba(255,255,255,0.06);
+  --edge2: rgba(255,255,255,0.1);
+  --amber: #f0a500;
+  --amber-dim: rgba(240,165,0,0.12);
+  --amber-glow: rgba(240,165,0,0.25);
+  --sky: #4fc3f7;
+  --text: #e8e8f8;
+  --sub: #8888aa;
+  --danger: #ff5c5c;
+  --ok: #4ade80;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  font-family: 'Instrument Sans', sans-serif;
+  background: var(--ink);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grain */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.03;
+}
+
+/* ── SCREENS ── */
+.screen { display: none; min-height: 100vh; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* ═══════════════ AUTH ═══════════════ */
+#auth {
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 10%, rgba(240,165,0,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 85% 90%, rgba(79,195,247,0.04) 0%, transparent 70%),
+    var(--ink);
+}
+
+.brand {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  animation: rise 0.7s cubic-bezier(.22,1,.36,1) both;
+}
+
+.brand-mark {
+  display: inline-flex;
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--amber-dim), rgba(240,165,0,0.03));
+  border: 1px solid rgba(240,165,0,0.2);
+  align-items: center; justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 0 40px rgba(240,165,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.brand h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.brand h1 em { font-style: normal; color: var(--amber); }
+
+.brand p {
+  color: var(--sub);
+  font-size: 0.8rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 0.6rem;
+}
+
+/* config notice */
+.worker-notice {
+  background: rgba(240,165,0,0.08);
+  border: 1px solid rgba(240,165,0,0.2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  color: #c8a040;
+  margin-bottom: 1.25rem;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex; align-items: center; gap: 0.6rem;
+  display: none; /* shown when WORKER_URL not set */
+}
+
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--edge2);
+  border-radius: 20px;
+  padding: 2rem;
+  width: 100%; max-width: 440px;
+  box-shadow:
+    0 32px 80px rgba(0,0,0,0.5),
+    0 0 0 1px var(--edge),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  animation: rise 0.7s 0.08s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* tabs */
+.tabs {
+  display: flex;
+  background: var(--deep);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 1.75rem;
+  border: 1px solid var(--edge);
+}
+.tab {
+  flex: 1; padding: 0.6rem;
+  border: none; border-radius: 9px;
+  background: transparent; color: var(--sub);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.tab.on {
+  background: var(--card);
+  color: var(--amber);
+  border: 1px solid rgba(240,165,0,0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.err-box {
+  background: rgba(255,92,92,0.08);
+  border: 1px solid rgba(255,92,92,0.25);
+  border-radius: 10px; padding: 0.7rem 1rem;
+  font-size: 0.82rem; color: var(--danger);
+  margin-bottom: 1rem; display: none;
+}
+
+.panel { display: none; }
+.panel.on { display: block; }
+
+/* fields */
+.f { margin-bottom: 1.1rem; }
+.f label {
+  display: block; font-size: 0.7rem;
+  color: var(--sub); letter-spacing: 2px;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.45rem;
+}
+.f input {
+  width: 100%; padding: 0.8rem 1rem;
+  background: var(--deep); border: 1px solid var(--edge2);
+  border-radius: 10px; color: var(--text);
+  font-size: 0.9rem; font-family: 'JetBrains Mono', monospace;
+  outline: none; transition: all 0.2s;
+}
+.f input:focus {
+  border-color: rgba(240,165,0,0.35);
+  box-shadow: 0 0 0 3px rgba(240,165,0,0.07);
+}
+.f input::placeholder { color: #30304a; }
+
+.hint {
+  font-size: 0.72rem; color: var(--sub);
+  margin-top: 0.35rem; line-height: 1.5;
+}
+
+/* big button */
+.cta {
+  width: 100%; padding: 0.95rem;
+  background: linear-gradient(135deg, #c88800, var(--amber));
+  border: none; border-radius: 12px;
+  color: #0a0800; font-weight: 700; font-size: 0.9rem;
+  font-family: 'Syne', sans-serif; letter-spacing: 0.3px;
+  cursor: pointer; transition: all 0.2s;
+  position: relative; overflow: hidden; margin-top: 0.25rem;
+}
+.cta::after {
+  content: '';
+  position: absolute; top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+.cta:hover::after { left: 100%; }
+.cta:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(240,165,0,0.3); }
+.cta:active { transform: translateY(0); }
+.cta:disabled { opacity: 0.45; cursor: not-allowed; }
+.cta:disabled::after { display: none; }
+
+.sep {
+  display: flex; align-items: center; gap: 0.75rem;
+  color: var(--sub); font-size: 0.75rem; margin: 1.25rem 0;
+}
+.sep::before, .sep::after {
+  content: ''; flex: 1; height: 1px; background: var(--edge2);
+}
+
+.info-row {
+  font-size: 0.75rem; color: var(--sub);
+  text-align: center; line-height: 1.6;
+}
+.info-row strong { color: var(--text); }
+
+
+/* ═══════════════ VAULT ═══════════════ */
+#vault { background: var(--ink); }
+
+.nav {
+  height: 60px;
+  background: rgba(14,14,26,0.95);
+  border-bottom: 1px solid var(--edge2);
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0 1.5rem;
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(16px);
+}
+
+.nav-brand {
+  font-family: 'Syne', sans-serif; font-size: 1.15rem;
+  font-weight: 800; color: var(--text); letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+.nav-brand span { color: var(--amber); }
+
+.code-pill {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: var(--amber-dim); border: 1px solid rgba(240,165,0,0.18);
+  border-radius: 8px; padding: 0.28rem 0.7rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--amber); cursor: pointer; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.code-pill:hover { background: rgba(240,165,0,0.18); }
+
+.nav-search {
+  flex: 1; max-width: 360px;
+  margin-left: auto; position: relative;
+}
+.nav-search input {
+  width: 100%; padding: 0.45rem 1rem 0.45rem 2.2rem;
+  background: var(--surface); border: 1px solid var(--edge);
+  border-radius: 8px; color: var(--text); font-size: 0.83rem;
+  font-family: 'Instrument Sans', sans-serif;
+  outline: none; transition: border-color 0.2s;
+}
+.nav-search input:focus { border-color: rgba(240,165,0,0.3); }
+.nav-search::before {
+  content: '⌕'; position: absolute;
+  left: 0.65rem; top: 50%; transform: translateY(-50%);
+  color: var(--sub); font-size: 0.95rem; pointer-events: none;
+}
+
+.nav-btn {
+  padding: 0.42rem 1rem; border-radius: 8px;
+  border: 1px solid rgba(240,165,0,0.4); background: transparent;
+  color: var(--amber); font-size: 0.8rem;
+  font-family: 'Instrument Sans', sans-serif;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: var(--amber-dim); }
+.nav-btn.ghost { border-color: var(--edge); color: var(--sub); }
+.nav-btn.ghost:hover { border-color: var(--danger); color: var(--danger); background: rgba(255,92,92,0.07); }
+
+/* content */
+.main { flex: 1; padding: 2rem 1.5rem; max-width: 1300px; margin: 0 auto; width: 100%; }
+
+.status-bar {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  background: var(--surface); border: 1px solid var(--edge);
+  border-radius: 10px; font-size: 0.77rem;
+  font-family: 'JetBrains Mono', monospace; margin-bottom: 1.75rem;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok); flex-shrink: 0;
+}
+.dot.spin { background: var(--amber); animation: pulse 1.2s ease infinite; }
+.dot.bad { background: var(--danger); animation: none; }
+.status-msg { color: var(--sub); }
+.status-msg b { color: var(--text); }
+.status-right { margin-left: auto; color: #555570; }
+
+.section-head {
+  display: flex; align-items: flex-end;
+  justify-content: space-between; margin-bottom: 1.5rem;
+}
+.section-head h2 {
+  font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 700;
+}
+.section-head h2 small {
+  display: block; font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.78rem; font-weight: 400; color: var(--sub); margin-bottom: 0.2rem;
+}
+
+.view-tog { display: flex; gap: 0.4rem; }
+.vtb {
+  width: 34px; height: 34px; border: 1px solid var(--edge);
+  border-radius: 7px; background: transparent;
+  color: var(--sub); cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.vtb.on { background: var(--amber-dim); border-color: rgba(240,165,0,0.25); color: var(--amber); }
+
+/* UPLOAD zone */
+.dropzone {
+  border: 2px dashed var(--edge2);
+  border-radius: 16px; padding: 2.5rem;
+  text-align: center; margin-bottom: 1.75rem;
+  cursor: pointer; transition: all 0.25s;
+  position: relative;
+}
+.dropzone:hover, .dropzone.over {
+  border-color: rgba(240,165,0,0.4);
+  background: rgba(240,165,0,0.02);
+}
+.dropzone-icon { font-size: 2.2rem; opacity: 0.5; margin-bottom: 0.6rem; }
+.dropzone p { color: var(--sub); font-size: 0.85rem; }
+.dropzone strong { color: var(--amber); }
+#file-in { display: none; }
+
+/* PROGRESS */
+.prog-wrap { display: none; margin-bottom: 1.25rem; }
+.prog-track { height: 3px; background: var(--edge); border-radius: 2px; overflow: hidden; margin-bottom: 0.4rem; }
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c88800, var(--amber), #ffe066);
+  background-size: 200%;
+  animation: shimmer 1.5s linear infinite;
+  border-radius: 2px; transition: width 0.3s; width: 0%;
+}
+@keyframes shimmer { from { background-position: 200% } to { background-position: -200% } }
+.prog-text { font-size: 0.73rem; color: var(--sub); font-family: 'JetBrains Mono', monospace; }
+
+/* GRID */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1.1rem;
+}
+.grid.list { grid-template-columns: 1fr; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--edge);
+  border-radius: 14px; overflow: hidden;
+  cursor: pointer; transition: all 0.22s;
+  animation: rise 0.4s cubic-bezier(.22,1,.36,1) both;
+}
+.card:hover {
+  border-color: rgba(240,165,0,0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.4), 0 0 20px rgba(240,165,0,0.06);
+}
+
+.thumb {
+  height: 150px;
+  background: linear-gradient(135deg, #1a1a2a, #0f0f1c);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3rem; color: var(--sub);
+  position: relative; overflow: hidden;
+}
+.thumb::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 50px;
+  background: linear-gradient(transparent, var(--card));
+}
+
+.card-body { padding: 0.9rem; }
+.card-name {
+  font-size: 0.82rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+.card-meta {
+  font-size: 0.7rem; color: var(--sub);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.card-actions {
+  display: flex; gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  border-top: 1px solid var(--edge);
+}
+.act {
+  flex: 1; padding: 0.35rem;
+  border: 1px solid var(--edge); border-radius: 6px;
+  background: transparent; color: var(--sub);
+  font-size: 0.72rem; cursor: pointer; transition: all 0.18s;
+  font-family: 'Instrument Sans', sans-serif;
+}
+.act:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+.act.rm:hover { border-color: var(--danger); color: var(--danger); background: rgba(255,92,92,0.07); }
+
+/* list mode */
+.grid.list .card { display: flex; align-items: center; }
+.grid.list .thumb { width: 72px; height: 64px; flex-shrink: 0; font-size: 1.6rem; border-radius: 0; }
+.grid.list .card-body { flex: 1; padding: 0.75rem; }
+.grid.list .card-actions { border-top: none; border-left: 1px solid var(--edge); flex-direction: column; width: 90px; }
+
+/* empty */
+.empty {
+  text-align: center; padding: 5rem 1rem;
+  color: var(--sub);
+}
+.empty-ico { font-size: 4rem; opacity: 0.2; margin-bottom: 1rem; }
+.empty h3 { font-family: 'Syne', sans-serif; font-size: 1.3rem; opacity: 0.35; color: var(--text); }
+
+/* ═══════════════ VIEWER ═══════════════ */
+#viewer { background: #050508; }
+
+.vbar {
+  height: 54px;
+  background: var(--deep);
+  border-bottom: 1px solid var(--edge);
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0 1.25rem;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.back {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--edge); border-radius: 7px;
+  background: transparent; color: var(--sub);
+  font-size: 0.78rem; cursor: pointer;
+  font-family: 'Instrument Sans', sans-serif;
+  transition: all 0.2s; flex-shrink: 0;
+}
+.back:hover { color: var(--text); border-color: var(--edge2); }
+
+.vtitle {
+  flex: 1; font-size: 0.85rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin: 0 0.75rem;
+}
+
+.pgctrl {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;
+}
+.pgbtn {
+  width: 30px; height: 30px; border: 1px solid var(--edge);
+  border-radius: 6px; background: transparent; color: var(--text);
+  cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.pgbtn:hover { background: rgba(255,255,255,0.05); }
+.pgbtn:disabled { opacity: 0.25; cursor: default; }
+.pginput {
+  width: 44px; padding: 0.28rem 0.4rem;
+  background: var(--surface); border: 1px solid var(--edge);
+  border-radius: 6px; color: var(--text); font-size: 0.76rem;
+  font-family: 'JetBrains Mono', monospace; text-align: center; outline: none;
+}
+
+.zctrl {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin-left: 0.4rem;
+}
+.zlabel {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: var(--sub); min-width: 38px; text-align: center;
+}
+
+.dl-btn {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgba(240,165,0,0.35); border-radius: 7px;
+  background: var(--amber-dim); color: var(--amber);
+  font-size: 0.78rem; cursor: pointer;
+  font-family: 'Instrument Sans', sans-serif;
+  transition: all 0.2s; margin-left: 0.4rem; flex-shrink: 0;
+}
+.dl-btn:hover { background: rgba(240,165,0,0.18); }
+
+.vwrap {
+  flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column;
+  align-items: center; padding: 2rem 1rem; gap: 1.25rem;
+}
+
+.vloading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  flex: 1; color: var(--sub); gap: 1rem;
+}
+.spin-ring {
+  width: 36px; height: 36px;
+  border: 2px solid var(--edge); border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.page-wrap {
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  border-radius: 3px; overflow: hidden;
+}
+.page-wrap canvas { display: block; max-width: 100%; }
+
+/* ═══════════════ MODALS ═══════════════ */
+.overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);
+  display: none; align-items: center; justify-content: center; padding: 1rem;
+}
+.overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--edge2);
+  border-radius: 20px; padding: 2rem;
+  max-width: 440px; width: 100%;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+  animation: rise 0.28s cubic-bezier(.22,1,.36,1);
+}
+.modal h3 { font-family: 'Syne', sans-serif; font-size: 1.3rem; margin-bottom: 0.6rem; }
+.modal p { color: var(--sub); font-size: 0.84rem; line-height: 1.6; }
+.modal-btns { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.5rem; }
+.btn-can {
+  padding: 0.55rem 1.1rem; border: 1px solid var(--edge); border-radius: 8px;
+  background: transparent; color: var(--sub); cursor: pointer; font-size: 0.83rem;
+  font-family: 'Instrument Sans', sans-serif; transition: all 0.2s;
+}
+.btn-can:hover { color: var(--text); }
+.btn-del {
+  padding: 0.55rem 1.1rem; border: none; border-radius: 8px;
+  background: var(--danger); color: white; cursor: pointer; font-size: 0.83rem;
+  font-family: 'Instrument Sans', sans-serif; transition: all 0.2s;
+}
+.btn-del:hover { background: #e04040; }
+
+/* code box */
+.code-reveal {
+  background: var(--deep); border: 1px solid rgba(240,165,0,0.25);
+  border-radius: 12px; padding: 1.25rem 1rem;
+  text-align: center; margin: 1rem 0;
+}
+.code-reveal .code {
+  font-family: 'JetBrains Mono', monospace; font-size: 1.4rem;
+  letter-spacing: 3px; color: var(--amber); word-break: break-all;
+}
+.code-reveal .codesub { font-size: 0.72rem; color: var(--sub); margin-top: 0.5rem; }
+.code-copy-btn {
+  margin-top: 0.75rem; padding: 0.45rem 1.2rem;
+  border: 1px solid rgba(240,165,0,0.3); border-radius: 8px;
+  background: var(--amber-dim); color: var(--amber);
+  font-size: 0.8rem; cursor: pointer;
+  font-family: 'Instrument Sans', sans-serif; transition: all 0.2s;
+}
+.code-copy-btn:hover { background: rgba(240,165,0,0.18); }
+
+/* ─── TOAST ─── */
+#toasts {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9998;
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.toast {
+  background: var(--card); border: 1px solid var(--edge2);
+  border-radius: 12px; padding: 0.85rem 1.1rem;
+  font-size: 0.82rem; max-width: 300px;
+  display: flex; align-items: center; gap: 0.6rem;
+  animation: slideRight 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.ok { border-color: rgba(74,222,128,0.3); }
+.toast.bad { border-color: rgba(255,92,92,0.3); }
+
+/* ─── KEYFRAMES ─── */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--deep); }
+::-webkit-scrollbar-thumb { background: var(--lift); border-radius: 3px; }
+
+/* responsive */
+@media (max-width: 600px) {
+  .nav { padding: 0 1rem; gap: 0.6rem; }
+  .nav-search { max-width: 130px; }
+  .main { padding: 1.25rem 1rem; }
+  .zctrl { display: none; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .vbar { padding: 0 0.75rem; gap: 0.4rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── TOASTS ── -->
+<div id="toasts"></div>
+
+<!-- ── DELETE CONFIRM ── -->
+<div class="overlay" id="del-modal">
+  <div class="modal">
+    <h3>Delete PDF?</h3>
+    <p>Permanently remove "<span id="del-name"></span>" from your vault. This cannot be undone.</p>
+    <div class="modal-btns">
+      <button class="btn-can" onclick="closeDelModal()">Cancel</button>
+      <button class="btn-del" onclick="confirmDel()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VAULT CODE MODAL ── -->
+<div class="overlay" id="code-modal">
+  <div class="modal">
+    <h3>🔐 Vault Created!</h3>
+    <p>This is your unique vault code. Save it — you'll need it to access your vault from any device.</p>
+    <div class="code-reveal">
+      <div class="code" id="show-code">----</div>
+      <div class="codesub">Your private vault identifier</div>
+      <button class="code-copy-btn" onclick="copyCode()">Copy Code</button>
+    </div>
+    <p style="font-size:0.73rem; margin-top:0.75rem; color:#666680">⚠️ We never store this code. If you lose it, the vault becomes inaccessible.</p>
+    <div class="modal-btns">
+      <button class="cta" style="width:auto; padding:0.55rem 1.5rem; font-size:0.85rem;" onclick="enterVault()">Enter My Vault →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ AUTH ════════════ -->
+<div class="screen active" id="auth">
+  <div class="brand">
+    <div class="brand-mark">🏛️</div>
+    <h1>PDF <em>Vault</em></h1>
+    <p>Secure Cloud Library</p>
+  </div>
+
+  <div class="glass">
+    <div id="worker-notice" class="worker-notice">
+      ⚠ Worker URL not configured — see setup guide
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('new')">Create Vault</button>
+      <button class="tab" onclick="switchTab('open')">Access Vault</button>
+    </div>
+
+    <div id="err-box" class="err-box"></div>
+
+    <!-- CREATE -->
+    <div class="panel on" id="panel-new">
+      <div class="f">
+        <label>Vault Name <span style="opacity:.5">(optional)</span></label>
+        <input id="vault-name" type="text" placeholder="My Documents" maxlength="50">
+      </div>
+      <button class="cta" id="btn-create" onclick="createVault()">
+        Create My Vault
+      </button>
+      <div class="sep">How it works</div>
+      <div class="info-row">
+        A <strong>private vault</strong> is created for you.<br>
+        You'll get a unique <strong>vault code</strong> — that's your only key.<br>
+        No account or password needed.
+      </div>
+    </div>
+
+    <!-- OPEN -->
+    <div class="panel" id="panel-open">
+      <div class="f">
+        <label>Vault Code</label>
+        <input id="vault-code-in" type="text" placeholder="XXXX-XXXX-XXXX-XXXX"
+               style="letter-spacing:2px; text-transform:uppercase"
+               autocomplete="off" spellcheck="false">
+        <div class="hint">Enter the code you received when creating your vault</div>
+      </div>
+      <button class="cta" id="btn-open" onclick="openVault()">
+        Open Vault
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ VAULT ════════════ -->
+<div class="screen" id="vault">
+  <nav class="nav">
+    <div class="nav-brand">PDF<span>Vault</span></div>
+    <div class="code-pill" onclick="showCodeModal()" title="Click to copy vault code">
+      🔑 <span id="pill-code">—</span>
+    </div>
+    <div class="nav-search">
+      <input type="text" placeholder="Search PDFs…" id="search-in" oninput="filterPDFs()">
+    </div>
+    <button class="nav-btn" onclick="document.getElementById('file-in').click()">+ Upload</button>
+    <button class="nav-btn" onclick="doSync()" id="sync-btn">⟳ Sync</button>
+    <button class="nav-btn ghost" onclick="logout()">Sign out</button>
+  </nav>
+
+  <div class="main">
+    <div class="status-bar">
+      <div class="dot" id="st-dot"></div>
+      <div class="status-msg" id="st-msg">Ready</div>
+      <div class="status-right" id="st-count"></div>
+    </div>
+
+    <div class="prog-wrap" id="prog-wrap">
+      <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+      <div class="prog-text" id="prog-text">Uploading…</div>
+    </div>
+
+    <div class="section-head">
+      <h2><small id="vault-name-disp">Your Vault</small>My Documents</h2>
+      <div class="view-tog">
+        <button class="vtb on" id="vbg" onclick="setView('grid')" title="Grid">⊞</button>
+        <button class="vtb" id="vbl" onclick="setView('list')" title="List">≡</button>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('file-in').click()">
+      <div class="dropzone-icon">📄</div>
+      <p><strong>Drop PDFs here</strong> or click to browse</p>
+      <p style="font-size:.75rem; margin-top:.3rem">Max 8 MB per file · Stored securely in the cloud</p>
+    </div>
+    <input type="file" id="file-in" accept=".pdf" multiple>
+
+    <div class="grid" id="g"></div>
+    <div class="empty" id="empty-state" style="display:none">
+      <div class="empty-ico">📂</div>
+      <h3>Vault is empty</h3>
+      <p style="margin-top:.4rem">Upload your first PDF to get started</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ VIEWER ════════════ -->
+<div class="screen" id="viewer">
+  <div class="vbar">
+    <button class="back" onclick="closeViewer()">← Back</button>
+    <div class="vtitle" id="v-title">Document</div>
+    <div class="pgctrl">
+      <button class="pgbtn" id="pg-prev" onclick="pageStep(-1)">‹</button>
+      <input class="pginput" type="number" id="pg-in" min="1" onchange="goPage(this.value)">
+      <span style="color:var(--sub); font-size:.75rem">/ <span id="pg-tot">1</span></span>
+      <button class="pgbtn" id="pg-next" onclick="pageStep(1)">›</button>
+    </div>
+    <div class="zctrl">
+      <button class="pgbtn" onclick="zoom(-0.2)" title="Zoom out">−</button>
+      <span class="zlabel" id="z-label">100%</span>
+      <button class="pgbtn" onclick="zoom(0.2)" title="Zoom in">+</button>
+    </div>
+    <button class="dl-btn" onclick="dlCurrent()">↓ Save</button>
+  </div>
+  <div class="vwrap" id="vwrap">
+    <div class="vloading" id="vload"><div class="spin-ring"></div><span>Loading…</span></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────
+// 🔧 REPLACE THIS with your Cloudflare Worker URL after deploying
+const WORKER_URL = 'https://dawn-hall-9929pdf-vault.p-c-9931534243.workers.dev';
+// ─────────────────────────────────────────────────────────────────────────
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let S = {
+  vaultCode: '', gistId: '', vaultName: 'My Vault',
+  pdfs: [], view: 'grid', q: ''
+};
+let pdfDoc = null, viewIdx = -1, curPage = 1, zScale = 1, delIdx = null;
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+}
+
+function toast(msg, type='', icon='•') {
+  const tc = $('toasts');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  tc.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(18px)'; t.style.transition='all .3s'; setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+function setStatus(msg, mode='ok') {
+  $('st-dot').className = 'dot' + (mode==='spin'?' spin': mode==='bad'?' bad':'');
+  $('st-msg').innerHTML = msg;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+// ── WORKER API ────────────────────────────────────────────────────────────
+async function api(endpoint, body={}) {
+  const res = await fetch(WORKER_URL + endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  ['new','open'].forEach(k => {
+    $(`panel-${k}`).classList.toggle('on', k===t);
+  });
+  document.querySelectorAll('.tab').forEach((b,i) =>
+    b.classList.toggle('on', (i===0)===(t==='new'))
+  );
+  $('err-box').style.display = 'none';
+}
+
+function showErr(msg) {
+  const b = $('err-box');
+  b.textContent = msg;
+  b.style.display = 'block';
+}
+
+async function createVault() {
+  const name = $('vault-name').value.trim() || 'My Vault';
+  const btn = $('btn-create');
+  btn.disabled = true; btn.textContent = 'Creating vault…';
+  $('err-box').style.display = 'none';
+  try {
+    const res = await api('/vault/create', { vaultName: name });
+    S = { ...S, vaultCode: res.vaultCode, gistId: res.gistId, vaultName: res.vaultName, pdfs: [] };
+    saveSession();
+    $('show-code').textContent = res.vaultCode;
+    $('code-modal').classList.add('open');
+  } catch(e) {
+    showErr(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create My Vault';
+  }
+}
+
+async function openVault() {
+  const code = $('vault-code-in').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'-').replace(/-+/g,'-');
+  if (!code || code.length < 4) { showErr('Enter your vault code'); return; }
+  const btn = $('btn-open');
+  btn.disabled = true; btn.textContent = 'Opening…';
+  $('err-box').style.display = 'none';
+  try {
+    const res = await api('/vault/open', { vaultCode: code });
+    S = { ...S, vaultCode: code, gistId: res.gistId, vaultName: res.meta.vaultName || 'My Vault', pdfs: res.meta.pdfs || [] };
+    saveSession();
+    enterVault();
+  } catch(e) {
+    showErr(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Open Vault';
+  }
+}
+
+// ── SESSION ───────────────────────────────────────────────────────────────
+function saveSession() {
+  sessionStorage.setItem('pv', JSON.stringify({
+    vaultCode: S.vaultCode, gistId: S.gistId, vaultName: S.vaultName
+  }));
+}
+
+function loadSession() {
+  try { return JSON.parse(sessionStorage.getItem('pv') || 'null'); } catch { return null; }
+}
+
+function logout() {
+  sessionStorage.removeItem('pv');
+  S = { vaultCode:'', gistId:'', vaultName:'', pdfs:[], view:'grid', q:'' };
+  pdfDoc = null;
+  showScreen('auth');
+}
+
+// ── ENTER VAULT ───────────────────────────────────────────────────────────
+function enterVault() {
+  $('code-modal').classList.remove('open');
+  $('pill-code').textContent = S.vaultCode.slice(0,9) + '…';
+  $('vault-name-disp').textContent = S.vaultName;
+  showScreen('vault');
+  render();
+  setStatus(`Synced · Vault <b>${S.vaultCode.slice(0,9)}</b>`);
+  updateCount();
+}
+
+function updateCount() {
+  $('st-count').textContent = S.pdfs.length + ' file' + (S.pdfs.length!==1?'s':'');
+}
+
+// ── SYNC ──────────────────────────────────────────────────────────────────
+async function doSync() {
+  setStatus('Syncing…', 'spin');
+  $('sync-btn').textContent = '⟳ Syncing';
+  try {
+    const res = await api('/vault/sync', { vaultCode: S.vaultCode, gistId: S.gistId });
+    S.pdfs = res.meta.pdfs || [];
+    render();
+    setStatus('Synced · ' + new Date().toLocaleTimeString());
+    updateCount();
+    toast('Vault synced', 'ok', '✓');
+  } catch(e) {
+    setStatus('Sync failed', 'bad');
+    toast('Sync failed: ' + e.message, 'bad', '✗');
+  } finally {
+    $('sync-btn').textContent = '⟳ Sync';
+  }
+}
+
+async function pushMeta(pdfsOverride) {
+  const meta = {
+    vaultCode: S.vaultCode,
+    vaultName: S.vaultName,
+    version: '1.0',
+    updated: new Date().toISOString(),
+    pdfs: (pdfsOverride || S.pdfs).map(p => {
+      const {_cache, ...clean} = p; return clean;
+    })
+  };
+  await api('/vault/save-meta', { vaultCode: S.vaultCode, gistId: S.gistId, meta });
+  return meta;
+}
+
+// ── UPLOAD ────────────────────────────────────────────────────────────────
+$('file-in').addEventListener('change', e => handleFiles([...e.target.files]));
+
+const dz = $('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const files = [...e.dataTransfer.files].filter(f=>f.type==='application/pdf');
+  if (files.length) handleFiles(files);
+  else toast('Only PDF files accepted', 'bad', '⚠');
+});
+
+async function handleFiles(files) {
+  for (const f of files) await uploadOne(f);
+}
+
+async function uploadOne(file) {
+  const MAX = 8*1024*1024;
+  if (file.size > MAX) { toast(`"${file.name}" too large (max 8MB)`, 'bad', '⚠'); return; }
+
+  const pw = $('prog-wrap'), pf = $('prog-fill'), pt = $('prog-text');
+  pw.style.display = 'block'; pf.style.width = '5%';
+  pt.textContent = `Reading "${file.name}"…`;
+
+  try {
+    const b64 = await new Promise((res,rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result.split(',')[1]);
+      r.onerror = rej; r.readAsDataURL(file);
+    });
+
+    pf.style.width = '35%'; pt.textContent = 'Counting pages…';
+
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+    let pages = null;
+    try {
+      const ab = b64ToAB(b64);
+      const doc = await pdfjsLib.getDocument({data:ab}).promise;
+      pages = doc.numPages;
+    } catch {}
+
+    pf.style.width = '55%'; pt.textContent = 'Uploading to vault…';
+    setStatus('Uploading…', 'spin');
+
+    const pdf = { id, name: file.name, size: file.size, pages, uploaded: new Date().toISOString() };
+    const newList = [pdf, ...S.pdfs];
+
+    const metaObj = {
+      vaultCode: S.vaultCode, vaultName: S.vaultName,
+      version: '1.0', updated: new Date().toISOString(),
+      pdfs: newList
+    };
+
+    await api('/vault/upload-file', {
+      vaultCode: S.vaultCode, gistId: S.gistId,
+      fileId: id, data: b64, meta: metaObj
+    });
+
+    pf.style.width = '100%';
+    S.pdfs = newList;
+    pdf._cache = b64;
+
+    render(); updateCount();
+    setStatus(`Saved · ${S.pdfs.length} files`);
+    toast(`"${file.name}" added to vault`, 'ok', '✓');
+    $('file-in').value = '';
+  } catch(e) {
+    setStatus('Upload failed', 'bad');
+    toast('Upload failed: ' + e.message, 'bad', '✗');
+  } finally {
+    setTimeout(() => { pw.style.display='none'; pf.style.width='0%'; }, 1200);
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function render() {
+  const grid = $('g'), empty = $('empty-state');
+  const q = S.q.toLowerCase();
+  const items = S.pdfs.filter(p => p.name.toLowerCase().includes(q));
+
+  if (!items.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.querySelector('p').textContent = q ? 'No matches found' : 'Upload your first PDF to get started';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = items.map((pdf, i) => `
+    <div class="card" style="animation-delay:${i*0.04}s">
+      <div class="thumb" id="th-${pdf.id}">📄</div>
+      <div class="card-body">
+        <div class="card-name" title="${pdf.name}">${pdf.name}</div>
+        <div class="card-meta">${pdf.pages?pdf.pages+' pages · ':''}${fmtBytes(pdf.size)}</div>
+        <div class="card-meta" style="margin-top:.15rem">${fmtDate(pdf.uploaded)}</div>
+      </div>
+      <div class="card-actions">
+        <button class="act" onclick="openPDF(${S.pdfs.indexOf(pdf)})">Open</button>
+        <button class="act" onclick="dlPDF(${S.pdfs.indexOf(pdf)})">Save</button>
+        <button class="act rm" onclick="promptDel(${S.pdfs.indexOf(pdf)})">Del</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterPDFs() { S.q = $('search-in').value; render(); }
+
+function setView(v) {
+  S.view = v;
+  $('g').classList.toggle('list', v==='list');
+  $('vbg').classList.toggle('on', v==='grid');
+  $('vbl').classList.toggle('on', v==='list');
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────
+function promptDel(i) {
+  delIdx = i;
+  $('del-name').textContent = S.pdfs[i].name;
+  $('del-modal').classList.add('open');
+}
+function closeDelModal() { $('del-modal').classList.remove('open'); delIdx=null; }
+
+async function confirmDel() {
+  if (delIdx===null) return;
+  const pdf = S.pdfs[delIdx];
+  closeDelModal();
+  setStatus('Deleting…', 'spin');
+  try {
+    const newList = S.pdfs.filter((_,i)=>i!==delIdx);
+    const metaObj = { vaultCode:S.vaultCode, vaultName:S.vaultName, version:'1.0', updated:new Date().toISOString(), pdfs:newList };
+    await api('/vault/delete-file', { vaultCode:S.vaultCode, gistId:S.gistId, fileId:pdf.id, meta:metaObj });
+    S.pdfs = newList;
+    render(); updateCount();
+    setStatus(`Deleted · ${S.pdfs.length} files`);
+    toast(`"${pdf.name}" deleted`, '', '🗑');
+  } catch(e) {
+    setStatus('Delete failed','bad');
+    toast('Delete failed: '+e.message,'bad','✗');
+  }
+}
+
+// ── VIEWER ────────────────────────────────────────────────────────────────
+async function openPDF(idx) {
+  const pdf = S.pdfs[idx];
+  viewIdx = idx; curPage = 1; zScale = 1;
+  $('v-title').textContent = pdf.name;
+  $('z-label').textContent = '100%';
+  $('vwrap').innerHTML = '';
+  $('vwrap').appendChild(createLoading());
+  showScreen('viewer');
+
+  try {
+    let b64 = pdf._cache;
+    if (!b64) {
+      setStatus('Loading PDF…', 'spin');
+      const res = await api('/vault/get-file', { vaultCode:S.vaultCode, gistId:S.gistId, fileId:pdf.id });
+      b64 = res.data; pdf._cache = b64;
+    }
+    const ab = b64ToAB(b64);
+    pdfDoc = await pdfjsLib.getDocument({data:ab}).promise;
+    $('pg-tot').textContent = pdfDoc.numPages;
+    $('pg-in').value = 1; $('pg-in').max = pdfDoc.numPages;
+    $('vwrap').innerHTML = '';
+    await renderAllPages();
+    setStatus(`Viewing · ${pdf.name}`);
+  } catch(e) {
+    $('vwrap').innerHTML = `<div class="vloading" style="color:var(--danger)">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function createLoading() {
+  const d = document.createElement('div');
+  d.className = 'vloading'; d.id = 'vload';
+  d.innerHTML = '<div class="spin-ring"></div><span>Loading document…</span>';
+  return d;
+}
+
+async function renderAllPages() {
+  const wrap = $('vwrap');
+  const vw = Math.min(window.innerWidth - 32, 860);
+  for (let i=1; i<=pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const vp0 = page.getViewport({scale:1});
+    const scale = (vw/vp0.width) * zScale;
+    const vp = page.getViewport({scale});
+    const pw = document.createElement('div');
+    pw.className = 'page-wrap'; pw.id = `pg-${i}`; pw.dataset.page = i;
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({canvasContext:canvas.getContext('2d'), viewport:vp}).promise;
+    pw.appendChild(canvas); wrap.appendChild(pw);
+  }
+
+  // track page scroll
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        curPage = +e.target.dataset.page;
+        $('pg-in').value = curPage;
+        $('pg-prev').disabled = curPage<=1;
+        $('pg-next').disabled = curPage>=pdfDoc.numPages;
+      }
+    });
+  }, {threshold:0.4, root:wrap});
+  wrap.querySelectorAll('.page-wrap').forEach(el=>obs.observe(el));
+}
+
+function pageStep(d) { goPage(curPage+d); }
+function goPage(n) {
+  n = parseInt(n);
+  if (!pdfDoc||n<1||n>pdfDoc.numPages) return;
+  const el = document.getElementById(`pg-${n}`);
+  if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function zoom(d) {
+  zScale = Math.max(0.5, Math.min(3, zScale+d));
+  $('z-label').textContent = Math.round(zScale*100)+'%';
+  if (pdfDoc) { $('vwrap').innerHTML=''; await renderAllPages(); }
+}
+
+function closeViewer() { pdfDoc=null; showScreen('vault'); }
+
+// ── DOWNLOAD ──────────────────────────────────────────────────────────────
+async function dlPDF(idx) {
+  const pdf = S.pdfs[idx];
+  setStatus('Preparing download…','spin');
+  try {
+    let b64 = pdf._cache;
+    if (!b64) {
+      const res = await api('/vault/get-file', { vaultCode:S.vaultCode, gistId:S.gistId, fileId:pdf.id });
+      b64 = res.data; pdf._cache = b64;
+    }
+    const blob = new Blob([b64ToAB(b64)], {type:'application/pdf'});
+    const a = Object.assign(document.createElement('a'), {href:URL.createObjectURL(blob), download:pdf.name});
+    a.click(); URL.revokeObjectURL(a.href);
+    setStatus('Downloaded · '+pdf.name);
+    toast('Download started','ok','↓');
+  } catch(e) {
+    setStatus('Download failed','bad');
+    toast('Download failed: '+e.message,'bad','✗');
+  }
+}
+function dlCurrent() { if (viewIdx>=0) dlPDF(viewIdx); }
+
+// ── CODE MODAL ────────────────────────────────────────────────────────────
+function showCodeModal() {
+  $('show-code').textContent = S.vaultCode;
+  $('code-modal').classList.add('open');
+}
+function copyCode() {
+  navigator.clipboard.writeText(S.vaultCode).then(()=>toast('Vault code copied!','ok','📋'));
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function b64ToAB(b64) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// ── KEYBOARD ──────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ($('viewer').classList.contains('active')) {
+    if (e.key==='ArrowRight'||e.key==='ArrowDown') pageStep(1);
+    if (e.key==='ArrowLeft'||e.key==='ArrowUp') pageStep(-1);
+    if (e.key==='Escape') closeViewer();
+    if (e.key==='='||e.key==='+') zoom(0.2);
+    if (e.key==='-') zoom(-0.2);
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+(async function init() {
+  // Check if worker URL is configured
+  if (!WORKER_URL || WORKER_URL.includes('YOUR-WORKER')) {
+    $('worker-notice').style.display = 'flex';
+  }
+
+  const sess = loadSession();
+  if (sess?.vaultCode && sess?.gistId) {
+    Object.assign(S, sess);
+    setStatus('Loading vault…','spin');
+    try {
+      const res = await api('/vault/sync', { vaultCode:S.vaultCode, gistId:S.gistId });
+      S.pdfs = res.meta.pdfs || [];
+      S.vaultName = res.meta.vaultName || S.vaultName;
+      enterVault();
+    } catch { logout(); }
+  }
+})();
+</script>
+</body>
+</html>
